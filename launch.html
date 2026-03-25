@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>SMART on FHIR - Launching...</title>
+    <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 flex items-center justify-center h-screen overflow-hidden">
+
+    <div class="text-center">
+        <div class="inline-block relative h-20 w-20">
+            <div class="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-t-indigo-500 rounded-full animate-spin"></div>
+        </div>
+        
+        <h2 class="mt-8 text-xl font-bold text-white tracking-tight">SMART Security Launching</h2>
+        <p class="mt-2 text-slate-400 text-sm font-mono">Connecting to FHIR Provider...</p>
+        
+        <div class="mt-10 flex justify-center space-x-3">
+            <span class="px-2 py-1 bg-slate-800 text-[10px] text-slate-500 rounded border border-slate-700 font-bold uppercase">OAuth2</span>
+            <span class="px-2 py-1 bg-slate-800 text-[10px] text-slate-500 rounded border border-slate-700 font-bold uppercase">OIDC</span>
+            <span class="px-2 py-1 bg-slate-800 text-[10px] text-slate-500 rounded border border-slate-700 font-bold uppercase">HL7 FHIR</span>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * SMART on FHIR 授權啟動
+         */
+        FHIR.oauth2.authorize({
+            // 1. 比賽或正式環境註冊的 Client ID
+            "clientId": "smart-claim-pro-app-id", 
+            
+            // 2. 要求的存取範圍 (Scopes)
+            // patient/*.read: 讀取該病患的所有資料
+            // launch: 告訴 Server 這是從 HIS 啟動的
+            "scope": "patient/*.read user/Patient.read launch openid profile fhirUser",
+            
+            // 3. 認證成功後的導回頁面
+            "redirectUri": "index.html",
+            
+            // 4. 取得 ISS (FHIR Server URL) 並執行授權流程
+            // 系統會自動從 URL 的 query string 抓取 iss 參數
+            "iss": new URLSearchParams(window.location.search).get("iss")
+        });
+    </script>
+</body>
+</html>
