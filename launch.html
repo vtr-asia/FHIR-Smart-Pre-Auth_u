@@ -22,38 +22,68 @@
         
         <div class="mt-10 flex justify-center gap-2 flex-wrap">
             <span class="px-3 py-1 bg-emerald-900/70 text-emerald-300 text-xs rounded-xl border border-emerald-700 font-medium">Confidential Client</span>
-            <span class="px-3 py-1 bg-slate-800 text-slate-400 text-xs rounded-xl border border-slate-700 font-medium">Authorization Code + client_secret</span>
+            <span class="px-3 py-1 bg-slate-800 text-slate-400 text-xs rounded-xl border border-slate-700 font-medium">Auth Code + Secret</span>
             <span class="px-3 py-1 bg-slate-800 text-slate-400 text-xs rounded-xl border border-slate-700 font-medium">OAuth2</span>
         </div>
 
-        <div class="mt-12 text-[10px] text-slate-500 font-mono">
+        <div id="status-msg" class="mt-6 text-slate-500 text-xs italic">正在導向授權伺服器...</div>
+
+        <div class="mt-12 text-[10px] text-slate-600 font-mono">
             Client ID: cc344727-6f90-496c-94fd-c7829aa9a51d
         </div>
     </div>
 
     <script>
-        // ==================== 第二階段憑證 ====================
+        // ==================== 憑證與設定 ====================
+        // 注意：在正式環境中，Secret 不應直接寫在前端
         const CLIENT_ID     = "cc344727-6f90-496c-94fd-c7829aa9a51d";
         const CLIENT_SECRET = "79f04b56b33491716c0880af72cdef7d3f0629111421cedd18353651cd313d9e";
+        
+        // 建議改為絕對路徑以避免在 GitHub Pages 上跳轉失敗
+        const REDIRECT_URI  = window.location.origin + window.location.pathname.replace("launch.html", "index.html");
 
-        // ==================== SMART Launch 主要函數 ====================
-        async function launchSMART() {
-            const iss = new URLSearchParams(window.location.search).get("iss");
+        async function startLaunch() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const iss = urlParams.get("iss");
+            const code = urlParams.get("code");
+            const statusDiv = document.getElementById("status-msg");
 
+            // 1. 防止重複跳轉：如果 URL 已經包含 code，代表已經完成授權回來了
+            if (code) {
+                statusDiv.innerText = "已取得授權碼，正在處理中...";
+                console.log("Detected 'code' in URL, skipping re-authorization.");
+                return;
+            }
+
+            // 2. 檢查關鍵參數 iss
             if (!iss) {
-                alert("錯誤：缺少 iss 參數！\n請確認 launch URL 包含 ?iss=您的FHIR Server URL");
+                statusDiv.innerHTML = "<span class='text-red-400'>錯誤：URL 缺少 iss 參數</span>";
+                alert("錯誤：缺少 iss 參數！\n請確認啟動網址包含 ?iss=FHIR_SERVER_URL");
                 return;
             }
 
             try {
-                console.log("🚀 開始 SMART Launch... iss =", iss);
+                console.log("🚀 發起 SMART Launch...");
+                console.log("Target ISS:", iss);
+                console.log("Redirect URI:", REDIRECT_URI);
 
+                // 3. 執行授權導向
                 await FHIR.oauth2.authorize({
                     clientId: CLIENT_ID,
-                    clientSecret: CLIENT_SECRET,        // Confidential Client 使用
+                    clientSecret: CLIENT_SECRET,
                     scope: "patient/*.read user/Patient.read launch openid profile fhirUser",
-                    redirectUri: "index.html",          // 授權完成後跳轉至 index.html
+                    redirectUri: REDIRECT_URI,
                     iss: iss
                 });
 
-                // 注意：authorize() 
+            } catch (error) {
+                console.error("Launch Error:", error);
+                statusDiv.innerHTML = `<span class='text-red-400'>啟動失敗: ${error.message}</span>`;
+            }
+        }
+
+        // 啟動流程
+        startLaunch();
+    </script>
+</body>
+</html>
