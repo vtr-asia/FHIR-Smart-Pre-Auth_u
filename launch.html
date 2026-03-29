@@ -2,46 +2,88 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>SMART on FHIR - Launching...</title>
+    <title>SMART on FHIR - Launching (第二階段 Confidential Client)</title>
     <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; }
+    </style>
 </head>
 <body class="bg-slate-900 flex items-center justify-center h-screen overflow-hidden">
 
-    <div class="text-center">
-        <div class="inline-block relative h-20 w-20">
+    <div class="text-center max-w-md">
+        <div class="inline-block relative h-20 w-20 mx-auto">
             <div class="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
             <div class="absolute inset-0 border-4 border-t-indigo-500 rounded-full animate-spin"></div>
         </div>
         
-        <h2 class="mt-8 text-xl font-bold text-white tracking-tight">SMART Security Launching</h2>
-        <p class="mt-2 text-slate-400 text-sm font-mono">Connecting to FHIR Provider...</p>
+        <h2 class="mt-8 text-2xl font-bold text-white tracking-tight">SMART on FHIR 啟動中</h2>
+        <p class="mt-3 text-slate-400 text-sm font-mono">第二階段 Confidential Client 授權流程</p>
         
-        <div class="mt-10 flex justify-center space-x-3">
-            <span class="px-2 py-1 bg-slate-800 text-[10px] text-slate-500 rounded border border-slate-700 font-bold uppercase">OAuth2</span>
-            <span class="px-2 py-1 bg-slate-800 text-[10px] text-slate-500 rounded border border-slate-700 font-bold uppercase">OIDC</span>
-            <span class="px-2 py-1 bg-slate-800 text-[10px] text-slate-500 rounded border border-slate-700 font-bold uppercase">HL7 FHIR</span>
+        <div class="mt-10 flex justify-center gap-2 flex-wrap">
+            <span class="px-3 py-1 bg-emerald-900/70 text-emerald-300 text-xs rounded-xl border border-emerald-700 font-medium">Confidential Client</span>
+            <span class="px-3 py-1 bg-slate-800 text-slate-400 text-xs rounded-xl border border-slate-700 font-medium">Auth Code + Secret</span>
+            <span class="px-3 py-1 bg-slate-800 text-slate-400 text-xs rounded-xl border border-slate-700 font-medium">OAuth2</span>
+        </div>
+
+        <div id="status-msg" class="mt-6 text-slate-500 text-xs italic">正在導向授權伺服器...</div>
+
+        <div class="mt-12 text-[10px] text-slate-600 font-mono">
+            Client ID: cc344727-6f90-496c-94fd-c7829aa9a51d
         </div>
     </div>
 
     <script>
-        /**
-         * SMART on FHIR 授權啟動
-         * 使用您提供的測試 Client ID
-         */
-        FHIR.oauth2.authorize({
-            // 測試用 Client ID（第二階段）
-            "clientId": "cc344727-6f90-496c-94fd-c7829aa9a51d", 
-            
-            // 要求的存取範圍
-            "scope": "patient/*.read user/Patient.read launch openid profile fhirUser",
-            
-            // 認證成功後的導回頁面
-            "redirectUri": "index.html",
-            
-            // 從 URL query string 自動取得 iss 參數
-            "iss": new URLSearchParams(window.location.search).get("iss")
-        });
+        // ==================== 憑證與設定 ====================
+        // 注意：在正式環境中，Secret 不應直接寫在前端
+        const CLIENT_ID     = "cc344727-6f90-496c-94fd-c7829aa9a51d";
+        const CLIENT_SECRET = "79f04b56b33491716c0880af72cdef7d3f0629111421cedd18353651cd313d9e";
+        
+        // 建議改為絕對路徑以避免在 GitHub Pages 上跳轉失敗
+        const REDIRECT_URI  = window.location.origin + window.location.pathname.replace("launch.html", "index.html");
+
+        async function startLaunch() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const iss = urlParams.get("iss");
+            const code = urlParams.get("code");
+            const statusDiv = document.getElementById("status-msg");
+
+            // 1. 防止重複跳轉：如果 URL 已經包含 code，代表已經完成授權回來了
+            if (code) {
+                statusDiv.innerText = "已取得授權碼，正在處理中...";
+                console.log("Detected 'code' in URL, skipping re-authorization.");
+                return;
+            }
+
+            // 2. 檢查關鍵參數 iss
+            if (!iss) {
+                statusDiv.innerHTML = "<span class='text-red-400'>錯誤：URL 缺少 iss 參數</span>";
+                alert("錯誤：缺少 iss 參數！\n請確認啟動網址包含 ?iss=FHIR_SERVER_URL");
+                return;
+            }
+
+            try {
+                console.log("🚀 發起 SMART Launch...");
+                console.log("Target ISS:", iss);
+                console.log("Redirect URI:", REDIRECT_URI);
+
+                // 3. 執行授權導向
+                await FHIR.oauth2.authorize({
+                    clientId: CLIENT_ID,
+                    clientSecret: CLIENT_SECRET,
+                    scope: "patient/*.read user/Patient.read launch openid profile fhirUser",
+                    redirectUri: REDIRECT_URI,
+                    iss: iss
+                });
+
+            } catch (error) {
+                console.error("Launch Error:", error);
+                statusDiv.innerHTML = `<span class='text-red-400'>啟動失敗: ${error.message}</span>`;
+            }
+        }
+
+        // 啟動流程
+        startLaunch();
     </script>
 </body>
 </html>
