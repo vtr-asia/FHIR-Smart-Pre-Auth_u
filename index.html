@@ -37,7 +37,7 @@
     </header>
 
     <main class="max-w-7xl mx-auto grid grid-cols-12 gap-6">
-        <!-- 左側給付規範區塊（保留你原本內容） -->
+        <!-- 左側給付規範區塊 -->
         <section class="col-span-12 lg:col-span-6">
             <div class="bg-white rounded-3xl p-8 shadow-xl border border-slate-100">
                 <h2 class="text-lg font-bold text-slate-800 mb-6 flex items-center italic">
@@ -68,8 +68,7 @@
                             <p class="text-sm font-semibold text-amber-900">需附上 6 個月內之基因檢測報告 (EGFR Exon 19)</p>
                             <div class="evidence-line mt-3 pl-4 border-amber-200">
                                 <p class="text-xs text-amber-700 font-medium italic">📍 缺件警告 (DiagnosticReport):</p>
-                                <p class="text-xs text-amber-600 mt-1">系統未偵測到結構化基因報告。建議點擊「調閱電子病歷」補正。</p>
-                                <button class="mt-2 text-[10px] bg-amber-600 text-white px-3 py-1 rounded-lg">自動搜尋 EMR</button>
+                                <p id="report-status" class="text-xs text-amber-600 mt-1">系統正在查詢基因報告...</p>
                             </div>
                         </div>
                     </div>
@@ -84,9 +83,9 @@
             </div>
         </section>
 
-        <!-- 右側區塊可繼續補充你原本的內容 -->
+        <!-- 右側病人資訊區塊 -->
         <section class="col-span-12 lg:col-span-6 space-y-6">
-            <!-- 你原本的事審歷程與預估總額區塊放在這裡 -->
+            <div id="patient-info" class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-sm"></div>
         </section>
     </main>
 
@@ -96,55 +95,68 @@
         async function initializeSMART() {
             const patientNameEl = document.getElementById("patient-name");
             const clinicalEvidenceEl = document.getElementById("clinical-evidence");
+            const reportStatusEl = document.getElementById("report-status");
+            const patientInfoEl = document.getElementById("patient-info");
 
             try {
                 patientNameEl.textContent = "授權驗證中...";
-                console.log("🔄 正在使用授權碼交換 Access Token (Public Client + PKCE)...");
 
-                // 執行 token 交換與 client 初始化
                 smartClient = await FHIR.oauth2.ready();
-
                 console.log("✅ SMART Client 初始化成功", smartClient);
 
-                // 讀取病人基本資料
+                // 抓取 Patient
                 const patient = await smartClient.patient.read();
-                const name = patient.name?.[0] || {};
-                const fullName = `${name.given?.join(' ') || ''} ${name.family || ''}`.trim();
+                const nameObj = patient.name?.[0] || {};
+                const fullName = [...(nameObj.given || []), nameObj.family || ''].filter(Boolean).join(' ').trim() || "未知病人";
 
-                patientNameEl.textContent = fullName || "未知病人";
-                console.log("病人資料:", patient);
+                const birthDate = patient.birthDate || "未提供";
+                const genderMap = { male: "男", female: "女", other: "其他", unknown: "未知" };
+                const gender = genderMap[patient.gender] || patient.gender || "未提供";
 
-                // 範例：讀取 Condition（可擴充到 clinical-evidence）
-                try {
-                    const conditions = await smartClient.patient.request("Condition", { pageLimit: 10 });
-                    if (conditions?.length > 0) {
-                        clinicalEvidenceEl.textContent = conditions[0].code?.text || "已找到相關診斷";
-                    }
-                } catch (e) {
-                    clinicalEvidenceEl.textContent = "無法讀取臨床證據";
+                patientNameEl.innerHTML = `
+                    ${fullName}<br>
+                    <span class="text-sm text-slate-500">ID: ${patient.id} | 出生: ${birthDate} | 性別: ${gender}</span>
+                `;
+
+                patientInfoEl.innerHTML = `
+                    <h3 class="font-semibold mb-3 text-slate-700">病人基本資訊</h3>
+                    <p><strong>Patient ID：</strong>${patient.id}</p>
+                    <p><strong>姓名：</strong>${fullName}</p>
+                    <p><strong>出生日期：</strong>${birthDate}</p>
+                    <p><strong>性別：</strong>${gender}</p>
+                `;
+
+                // Condition
+                const conditions = await smartClient.patient.request("Condition?_sort=-onset-date", { pageLimit: 15 });
+                let diagnosisText = "無相關診斷紀錄";
+                if (conditions?.length > 0) {
+                    const relevant = conditions.find(c => 
+                        (c.code?.text || "").toLowerCase().includes("lung") || 
+                        (c.code?.text || "").toLowerCase().includes("肺") ||
+                        (c.code?.coding || []).some(coding => coding.code?.includes("C34"))
+                    ) || conditions[0];
+                    diagnosisText = relevant.code?.text || relevant.code?.coding?.[0]?.display || "已找到診斷";
                 }
+                clinicalEvidenceEl.textContent = diagnosisText;
+
+                // DiagnosticReport
+                const reports = await smartClient.patient.request("DiagnosticReport?category=GEN&_sort=-issued", { pageLimit: 8 });
+                reportStatusEl.textContent = reports.length > 0 
+                    ? `已找到 ${reports.length} 份基因/病理報告` 
+                    : "未偵測到近期基因檢測報告";
+
+                console.log("資料抓取完成 - Patient ID:", patient.id);
 
             } catch (error) {
-                console.error("❌ SMART ready 失敗:", error);
+                console.error("❌ 初始化失敗:", error);
                 patientNameEl.innerHTML = `<span class="text-red-500">授權失敗: ${error.message || error}</span>`;
-                
-                // 可加入重試按鈕
-                const retryBtn = document.createElement("button");
-                retryBtn.className = "mt-4 px-5 py-2 bg-red-600 text-white rounded-xl text-sm";
-                retryBtn.textContent = "重新啟動授權";
-                retryBtn.onclick = () => window.location.href = "launch.html";
-                patientNameEl.parentNode.appendChild(retryBtn);
             }
         }
 
-        // 頁面載入後自動執行
-        window.addEventListener("load", initializeSMART);
-
-        // 其他你原本的函式（toggleJsonView、generatePreAuth 等）可繼續保留在這裡
         function toggleJsonView() {
             if (smartClient) {
-                console.log("Current SMART Client:", smartClient);
-                alert("已將 client 資訊輸出至 Console，請按 F12 查看");
+                console.log("SMART Client:", smartClient);
+                alert("已將詳細資訊輸出至 Console，請按 F12 查看");
             } else {
                 alert("SMART Client 尚未初始化");
             }
@@ -154,7 +166,7 @@
             alert("事前審查送出功能開發中...");
         }
 
-        // 初始化 Lucide icons
+        window.addEventListener("load", initializeSMART);
         lucide.createIcons();
     </script>
 </body>

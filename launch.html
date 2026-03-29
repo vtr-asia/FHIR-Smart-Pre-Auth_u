@@ -34,12 +34,9 @@
     </div>
 
     <script>
-        // ==================== 憑證與設定 ====================
-        // 注意：在正式環境中，Secret 不應直接寫在前端
         const CLIENT_ID     = "cc344727-6f90-496c-94fd-c7829aa9a51d";
         const CLIENT_SECRET = "79f04b56b33491716c0880af72cdef7d3f0629111421cedd18353651cd313d9e";
         
-        // 建議改為絕對路徑以避免在 GitHub Pages 上跳轉失敗
         const REDIRECT_URI  = window.location.origin + window.location.pathname.replace("launch.html", "index.html");
 
         async function startLaunch() {
@@ -48,26 +45,23 @@
             const code = urlParams.get("code");
             const statusDiv = document.getElementById("status-msg");
 
-            // 1. 防止重複跳轉：如果 URL 已經包含 code，代表已經完成授權回來了
+            // 如果已經帶 code 回來，就直接跳轉到 index.html
             if (code) {
-                statusDiv.innerText = "已取得授權碼，正在處理中...";
-                console.log("Detected 'code' in URL, skipping re-authorization.");
+                statusDiv.innerText = "授權成功，正在載入主頁...";
+                window.location.replace(REDIRECT_URI + window.location.search);
                 return;
             }
 
-            // 2. 檢查關鍵參數 iss
             if (!iss) {
-                statusDiv.innerHTML = "<span class='text-red-400'>錯誤：URL 缺少 iss 參數</span>";
-                alert("錯誤：缺少 iss 參數！\n請確認啟動網址包含 ?iss=FHIR_SERVER_URL");
+                statusDiv.innerHTML = `<span class='text-red-400'>錯誤：缺少 iss 參數</span>`;
+                alert("錯誤：請在網址後加上 ?iss=您的FHIR伺服器網址");
                 return;
             }
 
             try {
-                console.log("🚀 發起 SMART Launch...");
-                console.log("Target ISS:", iss);
-                console.log("Redirect URI:", REDIRECT_URI);
+                statusDiv.innerText = "正在導向授權伺服器進行登入...";
+                console.log("🚀 SMART Launch 開始，目標 ISS:", iss);
 
-                // 3. 執行授權導向
                 await FHIR.oauth2.authorize({
                     clientId: CLIENT_ID,
                     clientSecret: CLIENT_SECRET,
@@ -78,12 +72,11 @@
 
             } catch (error) {
                 console.error("Launch Error:", error);
-                statusDiv.innerHTML = `<span class='text-red-400'>啟動失敗: ${error.message}</span>`;
+                statusDiv.innerHTML = `<span class='text-red-400'>啟動失敗: ${error.message || error}</span>`;
             }
         }
 
-        // 啟動流程
-        startLaunch();
+        window.addEventListener("load", startLaunch);
     </script>
 </body>
 </html>
