@@ -15,7 +15,6 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            color: #1e2937;
         }
         .container {
             text-align: center;
@@ -26,9 +25,9 @@
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
         }
         h1 {
-            font-size: 1.75rem;
+            font-size: 1.8rem;
             color: #1e40af;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .subtitle {
             color: #334155;
@@ -67,7 +66,7 @@
         <p class="subtitle">醫師臨床決策支援系統</p>
         
         <p style="color:#1e40af; font-weight:500; margin-bottom: 20px;">
-            正在連線至 SMART Health IT 測試伺服器
+            正在連線至 SMART Health IT 測試伺服器 (R4)
         </p>
         
         <div class="loader"></div>
@@ -76,12 +75,65 @@
 
         <div class="note">
             Client ID: cc344727-6f90-496c-94fd-c7829aa9a51d<br>
-            測試環境：SMART Health IT Sandbox (R4)
+            測試環境：SMART Health IT Sandbox
         </div>
     </div>
 
     <script>
-        // ==================== 配置 ====================
         const CLIENT_ID = "cc344727-6f90-496c-94fd-c7829aa9a51d";
         
-        // 自動產生正確的 redirect URI
+        // 自動產生正確的 redirect URI（適合 GitHub Pages）
+        const REDIRECT_URI = new URL("index.html", window.location.href).href;
+
+        async function startLaunch() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const iss = urlParams.get("iss");
+            const launchParam = urlParams.get("launch");
+            const statusEl = document.getElementById("status");
+
+            // 如果已經帶 code 回來 → 直接跳轉到 index.html
+            if (urlParams.get("code")) {
+                statusEl.innerHTML = "✅ 授權成功，正在載入醫師儀表板...";
+                window.location.replace(REDIRECT_URI + "?" + urlParams.toString());
+                return;
+            }
+
+            if (!iss) {
+                statusEl.innerHTML = `<span style="color:#ef4444;">錯誤：缺少 iss 參數</span>`;
+                return;
+            }
+
+            try {
+                statusEl.textContent = "正在導向 SMART Health IT 授權頁面...";
+
+                console.log("🚀 SMART Launch 開始");
+                console.log("ISS:", iss);
+                console.log("Launch 參數:", launchParam);
+                console.log("Redirect URI:", REDIRECT_URI);
+
+                await FHIR.oauth2.authorize({
+                    clientId: CLIENT_ID,
+                    scope: "launch patient/*.read user/Patient.read openid profile fhirUser online_access",
+                    redirectUri: REDIRECT_URI,
+                    iss: iss,
+                    launch: launchParam,           // 重要：傳入 launcher 帶來的 launch 參數
+                    pkceMode: "ifSupported",
+                    completeInTarget: true
+                });
+
+            } catch (error) {
+                console.error("Launch 錯誤:", error);
+                statusEl.innerHTML = `
+                    <span style="color:#ef4444;">
+                        Launch 失敗<br><br>
+                        ${error.message || error}<br><br>
+                        請按 F12 查看 Console 詳細錯誤
+                    </span>`;
+            }
+        }
+
+        // 頁面載入後立即執行
+        window.addEventListener("load", startLaunch);
+    </script>
+</body>
+</html>
