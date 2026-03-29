@@ -2,80 +2,123 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>SMART on FHIR - Launching (第二階段 Confidential Client)</title>
+    <title>Physician-CDSSU - 啟動中...</title>
     <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; }
+        body {
+            font-family: "Microsoft JhengHei", "Segoe UI", sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            text-align: center;
+            max-width: 520px;
+            padding: 40px 20px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        h2 { 
+            color: #2c3e50; 
+            margin-bottom: 8px;
+        }
+        .loader {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            animation: spin 1s linear infinite;
+            margin: 30px auto;
+        }
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+        .status { 
+            color: #555; 
+            font-size: 15px; 
+            margin-top: 10px;
+        }
+        .info {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
     </style>
 </head>
-<body class="bg-slate-900 flex items-center justify-center h-screen overflow-hidden">
-
-    <div class="text-center max-w-md">
-        <div class="inline-block relative h-20 w-20 mx-auto">
-            <div class="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
-            <div class="absolute inset-0 border-4 border-t-indigo-500 rounded-full animate-spin"></div>
-        </div>
+<body>
+    <div class="container">
+        <h2>Physician-CDSSU</h2>
+        <p style="color:#e74c3c; font-weight:500;">醫師臨床決策支援系統</p>
         
-        <h2 class="mt-8 text-2xl font-bold text-white tracking-tight">SMART on FHIR 啟動中</h2>
-        <p class="mt-3 text-slate-400 text-sm font-mono">第二階段 Confidential Client 授權流程</p>
+        <p class="info">正在與測試 FHIR 伺服器建立安全連線...<br>
+           請稍候，我們將載入病人資料與臨床決策支援工具。</p>
         
-        <div class="mt-10 flex justify-center gap-2 flex-wrap">
-            <span class="px-3 py-1 bg-emerald-900/70 text-emerald-300 text-xs rounded-xl border border-emerald-700 font-medium">Confidential Client</span>
-            <span class="px-3 py-1 bg-slate-800 text-slate-400 text-xs rounded-xl border border-slate-700 font-medium">Auth Code + Secret</span>
-            <span class="px-3 py-1 bg-slate-800 text-slate-400 text-xs rounded-xl border border-slate-700 font-medium">OAuth2</span>
-        </div>
-
-        <div id="status-msg" class="mt-6 text-slate-500 text-xs italic">正在導向授權伺服器...</div>
-
-        <div class="mt-12 text-[10px] text-slate-600 font-mono">
-            Client ID: cc344727-6f90-496c-94fd-c7829aa9a51d
-        </div>
+        <div class="loader"></div>
+        
+        <p id="status" class="status">初始化 EHR Launch...</p>
     </div>
 
     <script>
         const CLIENT_ID     = "cc344727-6f90-496c-94fd-c7829aa9a51d";
         const CLIENT_SECRET = "79f04b56b33491716c0880af72cdef7d3f0629111421cedd18353651cd313d9e";
         
-        const REDIRECT_URI  = window.location.origin + window.location.pathname.replace("launch.html", "index.html");
+        // 更穩健的 redirectUri 寫法
+        const REDIRECT_URI = new URL("index.html", window.location.href).href;
 
         async function startLaunch() {
             const urlParams = new URLSearchParams(window.location.search);
             const iss = urlParams.get("iss");
             const code = urlParams.get("code");
-            const statusDiv = document.getElementById("status-msg");
+            const statusEl = document.getElementById("status");
 
-            // 如果已經帶 code 回來，就直接跳轉到 index.html
+            // 如果已經帶 code 回來，跳轉到 index.html 處理 token
             if (code) {
-                statusDiv.innerText = "授權成功，正在載入主頁...";
+                statusEl.innerHTML = "授權成功，正在載入醫師儀表板...";
                 window.location.replace(REDIRECT_URI + window.location.search);
                 return;
             }
 
             if (!iss) {
-                statusDiv.innerHTML = `<span class='text-red-400'>錯誤：缺少 iss 參數</span>`;
-                alert("錯誤：請在網址後加上 ?iss=您的FHIR伺服器網址");
+                statusEl.innerHTML = `<span style="color:red;">錯誤：缺少 iss 參數！<br>請使用 ?iss=您的FHIR伺服器網址</span>`;
+                console.error("缺少 iss 參數");
                 return;
             }
 
             try {
-                statusDiv.innerText = "正在導向授權伺服器進行登入...";
-                console.log("🚀 SMART Launch 開始，目標 ISS:", iss);
+                statusEl.textContent = "正在導向授權伺服器進行登入...";
+                console.log("🚀 開始 SMART Launch → ISS:", iss);
+                console.log("Redirect URI:", REDIRECT_URI);
 
                 await FHIR.oauth2.authorize({
                     clientId: CLIENT_ID,
-                    clientSecret: CLIENT_SECRET,
-                    scope: "patient/*.read user/Patient.read launch openid profile fhirUser",
+                    clientSecret: CLIENT_SECRET,        // Confidential Client 使用
+                    scope: "launch patient/*.read user/Patient.read openid profile fhirUser online_access",
                     redirectUri: REDIRECT_URI,
-                    iss: iss
+                    iss: iss,
+                    pkceMode: "ifSupported",
+                    completeInTarget: true
                 });
 
             } catch (error) {
-                console.error("Launch Error:", error);
-                statusDiv.innerHTML = `<span class='text-red-400'>啟動失敗: ${error.message || error}</span>`;
+                console.error("Launch 錯誤:", error);
+                statusEl.innerHTML = `
+                    <span style="color:red;">
+                        EHR Launch 失敗<br>
+                        ${error.message || error}<br><br>
+                        請檢查 Console 錯誤訊息
+                    </span>`;
             }
         }
 
+        // 頁面載入後執行
         window.addEventListener("load", startLaunch);
     </script>
 </body>
