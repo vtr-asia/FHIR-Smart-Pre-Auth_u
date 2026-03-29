@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
@@ -24,7 +23,7 @@
                 <i data-lucide="microscope" class="text-white w-7 h-7"></i>
             </div>
             <div>
-                <h1 id="patient-name" class="text-xl font-bold text-slate-800">授權處理中...</h1>
+                <h1 id="patient-name" class="text-xl font-bold text-slate-800">王大同 (Wang, Da-Tong)</h1>
                 <p class="text-slate-500 text-xs italic">案件類型：高額標靶藥物事前審查 (Pre-Auth Requested)</p>
             </div>
         </div>
@@ -37,7 +36,7 @@
     </header>
 
     <main class="max-w-7xl mx-auto grid grid-cols-12 gap-6">
-        <!-- 左側給付規範區塊（保留你原本內容） -->
+        
         <section class="col-span-12 lg:col-span-6">
             <div class="bg-white rounded-3xl p-8 shadow-xl border border-slate-100">
                 <h2 class="text-lg font-bold text-slate-800 mb-6 flex items-center italic">
@@ -54,7 +53,7 @@
                             <p class="text-sm font-semibold text-slate-700">需具有 EGFR 突變之非小細胞肺癌 (NSCLC)</p>
                             <div class="evidence-line mt-3 pl-4">
                                 <p class="text-xs text-indigo-600 font-medium">📍 臨床證據 (Condition):</p>
-                                <p id="clinical-evidence" class="text-xs text-slate-500 italic mt-1">載入中...</p>
+                                <p id="clinical-evidence" class="text-xs text-slate-500 italic mt-1">ICD-10: C34.90 (Malignant neoplasm of lung)</p>
                             </div>
                         </div>
                     </div>
@@ -84,78 +83,120 @@
             </div>
         </section>
 
-        <!-- 右側區塊可繼續補充你原本的內容 -->
         <section class="col-span-12 lg:col-span-6 space-y-6">
-            <!-- 你原本的事審歷程與預估總額區塊放在這裡 -->
+            <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+                <h3 class="text-sm font-bold text-slate-400 uppercase mb-6 italic text-sm">事審歷程追蹤 (FHIR Communication)</h3>
+                <div class="space-y-6">
+                    <div class="flex items-center">
+                        <div class="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">1</div>
+                        <div class="ml-4 flex-1">
+                            <p class="text-sm font-bold text-slate-700">申請提交 (Claim Requested)</p>
+                            <p class="text-[10px] text-slate-400">2026-01-08 10:00 AM</p>
+                        </div>
+                        <i data-lucide="check" class="text-green-500 w-4 h-4 text-sm font-bold underline"></i>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-[10px] font-bold">2</div>
+                        <div class="ml-4 flex-1 italic text-sm">
+                            <p class="text-sm font-bold text-slate-400">核付機率 AI 預評中...</p>
+                        </div>
+                        <div class="h-2 w-2 bg-indigo-600 rounded-full status-pulse"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-3xl p-8 text-white shadow-xl">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <p class="text-indigo-100 text-xs font-bold uppercase mb-1 italic text-sm">預估特材總額</p>
+                        <h4 class="text-4xl font-black tracking-tighter italic">NT$ 185,000</h4>
+                    </div>
+                    <i data-lucide="credit-card" class="text-indigo-300 opacity-50"></i>
+                </div>
+                <div class="flex items-center text-xs space-x-2 text-indigo-100 italic">
+                    <i data-lucide="info" class="w-3 h-3"></i>
+                    <span>含自費負擔項目 NT$ 15,000</span>
+                </div>
+            </div>
         </section>
     </main>
 
+    <div id="json-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-[#1e1e1e] w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden border border-slate-700">
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-black/20 font-mono text-[10px] text-slate-500 italic text-sm">
+                <span>PRE_AUTHORIZATION_RESOURCE_CL3.json</span>
+                <button onclick="toggleJsonView()" class="text-slate-400 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <pre class="p-8 text-green-400 font-mono text-xs overflow-auto max-h-[500px]" id="json-content"></pre>
+        </div>
+    </div>
+
     <script>
-        let smartClient = null;
+        // 設定預設 DEMO 資料
+        const DEFAULT_PATIENT = {
+            name: "王大同 (Wang, Da-Tong)",
+            diagnosis: "ICD-10: C34.90 (Malignant neoplasm of lung)",
+            fhirId: "preauth-cancer-001"
+        };
 
-        async function initializeSMART() {
-            const patientNameEl = document.getElementById("patient-name");
-            const clinicalEvidenceEl = document.getElementById("clinical-evidence");
+        // 當前病人變數 (可由外部賦值)
+        let currentPatientData = DEFAULT_PATIENT;
 
-            try {
-                patientNameEl.textContent = "授權驗證中...";
-                console.log("🔄 正在使用授權碼交換 Access Token (Public Client + PKCE)...");
-
-                // 執行 token 交換與 client 初始化
-                smartClient = await FHIR.oauth2.ready();
-
-                console.log("✅ SMART Client 初始化成功", smartClient);
-
-                // 讀取病人基本資料
-                const patient = await smartClient.patient.read();
-                const name = patient.name?.[0] || {};
-                const fullName = `${name.given?.join(' ') || ''} ${name.family || ''}`.trim();
-
-                patientNameEl.textContent = fullName || "未知病人";
-                console.log("病人資料:", patient);
-
-                // 範例：讀取 Condition（可擴充到 clinical-evidence）
-                try {
-                    const conditions = await smartClient.patient.request("Condition", { pageLimit: 10 });
-                    if (conditions?.length > 0) {
-                        clinicalEvidenceEl.textContent = conditions[0].code?.text || "已找到相關診斷";
-                    }
-                } catch (e) {
-                    clinicalEvidenceEl.textContent = "無法讀取臨床證據";
-                }
-
-            } catch (error) {
-                console.error("❌ SMART ready 失敗:", error);
-                patientNameEl.innerHTML = `<span class="text-red-500">授權失敗: ${error.message || error}</span>`;
-                
-                // 可加入重試按鈕
-                const retryBtn = document.createElement("button");
-                retryBtn.className = "mt-4 px-5 py-2 bg-red-600 text-white rounded-xl text-sm";
-                retryBtn.textContent = "重新啟動授權";
-                retryBtn.onclick = () => window.location.href = "launch.html";
-                patientNameEl.parentNode.appendChild(retryBtn);
-            }
+        // 初始化頁面顯示
+        function initDashboard() {
+            lucide.createIcons();
+            
+            // 更新 UI 上的病人姓名與證據
+            document.getElementById('patient-name').innerText = currentPatientData.name;
+            document.getElementById('clinical-evidence').innerText = currentPatientData.diagnosis;
         }
 
-        // 頁面載入後自動執行
-        window.addEventListener("load", initializeSMART);
-
-        // 其他你原本的函式（toggleJsonView、generatePreAuth 等）可繼續保留在這裡
-        function toggleJsonView() {
-            if (smartClient) {
-                console.log("Current SMART Client:", smartClient);
-                alert("已將 client 資訊輸出至 Console，請按 F12 查看");
-            } else {
-                alert("SMART Client 尚未初始化");
+        // 模擬從外部 (如 SMART Launch) 接收病人資料
+        function updatePatientFromFHIR(fhirPatient) {
+            if (fhirPatient && fhirPatient.name) {
+                currentPatientData = {
+                    name: fhirPatient.name,
+                    diagnosis: fhirPatient.diagnosis || "未提供臨床證據",
+                    fhirId: fhirPatient.id || "unknown"
+                };
+                initDashboard();
             }
         }
 
         function generatePreAuth() {
-            alert("事前審查送出功能開發中...");
+            const preAuthJSON = {
+                resourceType: "Claim",
+                id: currentPatientData.fhirId,
+                use: "preauthorization",
+                status: "active",
+                patient: { reference: `Patient/${currentPatientData.fhirId}`, display: currentPatientData.name },
+                created: new Date().toISOString(),
+                diagnosis: [{
+                    sequence: 1,
+                    diagnosisCodeableConcept: {
+                        coding: [{ system: "ICD-10", code: "C34.90", display: "肺癌" }]
+                    }
+                }],
+                supportingInfo: [
+                    { sequence: 1, category: { text: "Pathology" }, valueString: "Confirmed Stage IV NSCLC" },
+                    { sequence: 2, category: { text: "Note" }, valueString: "缺件警告：基因報告補件中" }
+                ],
+                item: [{
+                    productOrService: { text: "某高額標靶藥物 (EGFR TKI)" },
+                    net: { value: 185000, currency: "TWD" }
+                }]
+            };
+
+            document.getElementById('json-content').innerText = JSON.stringify(preAuthJSON, null, 2);
+            toggleJsonView();
         }
 
-        // 初始化 Lucide icons
-        lucide.createIcons();
+        function toggleJsonView() {
+            document.getElementById('json-modal').classList.toggle('hidden');
+        }
+
+        // 啟動初始化
+        window.onload = initDashboard;
     </script>
 </body>
 </html>
