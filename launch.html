@@ -58,6 +58,11 @@
             margin-top: 40px;
             line-height: 1.5;
         }
+        .warning {
+            color: #ef4444;
+            font-size: 12px;
+            margin-top: 8px;
+        }
     </style>
 </head>
 <body>
@@ -77,12 +82,13 @@
             Client ID: cc344727-6f90-496c-94fd-c7829aa9a51d<br>
             測試環境：SMART Health IT Sandbox
         </div>
+        <p class="warning">⚠️ 注意：此版本使用 Confidential Client 設定（純前端示範用）</p>
     </div>
 
     <script>
         const CLIENT_ID = "cc344727-6f90-496c-94fd-c7829aa9a51d";
-        
-        // 自動產生正確的 redirect URI（適合 GitHub Pages）
+        const CLIENT_SECRET = "79f04b56b33491716c0880af72cdef7d3f0629111421cedd18353651cd313d9e";   // ← 已加入
+
         const REDIRECT_URI = new URL("index.html", window.location.href).href;
 
         async function startLaunch() {
@@ -91,9 +97,8 @@
             const launchParam = urlParams.get("launch");
             const statusEl = document.getElementById("status");
 
-            // 如果已經帶 code 回來 → 直接跳轉到 index.html
             if (urlParams.get("code")) {
-                statusEl.innerHTML = "✅ 授權成功，正在載入醫師儀表板...";
+                statusEl.innerHTML = "✅ 授權成功，正在跳轉至醫師儀表板...";
                 window.location.replace(REDIRECT_URI + "?" + urlParams.toString());
                 return;
             }
@@ -104,19 +109,21 @@
             }
 
             try {
-                statusEl.textContent = "正在導向 SMART Health IT 授權頁面...";
+                statusEl.textContent = "正在導向授權頁面...";
 
                 console.log("🚀 SMART Launch 開始");
                 console.log("ISS:", iss);
                 console.log("Launch 參數:", launchParam);
                 console.log("Redirect URI:", REDIRECT_URI);
+                console.log("Client ID:", CLIENT_ID);
 
                 await FHIR.oauth2.authorize({
                     clientId: CLIENT_ID,
+                    clientSecret: CLIENT_SECRET,        // ← 已加入 client_secret
                     scope: "launch patient/*.read user/Patient.read openid profile fhirUser online_access",
                     redirectUri: REDIRECT_URI,
                     iss: iss,
-                    launch: launchParam,           // 重要：傳入 launcher 帶來的 launch 參數
+                    launch: launchParam,
                     pkceMode: "ifSupported",
                     completeInTarget: true
                 });
@@ -132,7 +139,6 @@
             }
         }
 
-        // 頁面載入後立即執行
         window.addEventListener("load", startLaunch);
     </script>
 </body>
